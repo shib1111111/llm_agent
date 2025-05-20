@@ -1,0 +1,8 @@
+langgraph
+langchain
+langchain-groq
+langchain-community
+psycopg2-binary
+faiss-cpu
+python-dotenv
+PyPDF2
