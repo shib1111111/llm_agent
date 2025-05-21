@@ -1,18 +1,28 @@
-# server/config.py
 import os
+import logging
 from dotenv import load_dotenv
 
-load_dotenv()
+def setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler()]
+    )
+    return logging.getLogger(__name__)
 
-DATABASE_URL = "sqlite:///user.db"
-# DATABASE_URL="postgresql://postgres:1234@localhost:5432/dbchatbot"
+def load_config():
+    logger = setup_logging()
+    load_dotenv()
+    config = {
+        "GROQ_API_KEY": os.getenv("GROQ_API_KEY"),
+        "PROCESSED_DOCS_DIR": "processed_docs"
+    }
+    if not config["GROQ_API_KEY"]:
+        logger.error("GROQ_API_KEY not found")
+        raise ValueError("Missing GROQ_API_KEY")
+    logger.info("Configuration loaded")
+    print("Step: Configuration loaded")
+    return config
 
-JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 10
-
-GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-NVIDIA_API_KEY = os.getenv('NVIDIA_API_KEY')
-
-LANGCHAIN_API_KEY = os.getenv('LANGCHAIN_API_KEY')
-TELEGRAM_SECRET_KEY = os.getenv('TELEGRAM_SECRET_KEY')
+CONFIG = load_config()
+logger = setup_logging()
