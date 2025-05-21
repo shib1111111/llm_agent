@@ -43,7 +43,7 @@ def setup_and_run_agent(query: str, db_uri: str, doc_folder: str):
 
 if __name__ == "__main__":
     db_uri = "postgresql+psycopg2://postgres:1234@localhost:5432/DataCoSupplyChain"
-    doc_folder = r"/home/shib/Desktop/llm_agent/dataset/pdfs"
+    doc_folder = r"C:\Users\shib kumar saraf\Downloads\llm_agent\dataset\pdfs"
     query = "What is the average benefit per transaction?"
 
     response = setup_and_run_agent(query, db_uri, doc_folder)
