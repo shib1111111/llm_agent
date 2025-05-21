@@ -15,6 +15,7 @@ def load_config():
     load_dotenv()
     config = {
         "GROQ_API_KEY": os.getenv("GROQ_API_KEY"),
+        "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY"),
         "PROCESSED_DOCS_DIR": "processed_docs"
     }
     if not config["GROQ_API_KEY"]:

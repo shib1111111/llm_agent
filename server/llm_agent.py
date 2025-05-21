@@ -2,6 +2,7 @@ from typing import TypedDict, Optional
 import json
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
+from llm_models import BedrockLanguageModel
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from config import logger, CONFIG
@@ -19,7 +20,9 @@ class QueryAgent:
     def __init__(self, db_manager, vector_store):
         self.db_manager = db_manager
         self.vector_store = vector_store
-        self.llm = ChatGroq(model="llama-3.3-70b-versatile", api_key=CONFIG["GROQ_API_KEY"])
+        # self.llm = ChatGroq(model="llama-3.3-70b-versatile", api_key=CONFIG["GROQ_API_KEY"])
+        # self.llm = ChatAnthropic(model="claude-3.5-sonnet",api_key=CONFIG["ANTHROPIC_API_KEY"])
+        self.llm = BedrockLanguageModel(api_key=CONFIG["ANTHROPIC_API_KEY"], model_id="claude-3.5-sonnet")
         self.parser = StrOutputParser()
         logger.info("LLM initialized")
         print("Step: LLM initialized")
@@ -32,25 +35,18 @@ class QueryAgent:
             """
             You are a data analyst planning how to answer a query using a PostgreSQL database and a document repository.
             Provide a JSON plan with:
-            {
+            {{
                 "intent": "document" | "data" | "hybrid",
                 "approach": "db_first" | "doc_first" | "none",
                 "db_query": string,
                 "doc_query": string
-            }
+            }}
             - intent: 'document' (document-based), 'data' (database-based), or 'hybrid' (both).
             - approach: For 'hybrid', specify 'db_first' or 'doc_first'; use 'none' for 'document' or 'data'.
             - db_query: Sub-query for the database (e.g., "Count of basket sales in Kolkata") or "" if not applicable.
             - doc_query: Sub-query for documents (e.g., "Kolkata sales in winter season") or "" if not applicable.
             For complex queries, split into db and doc sub-queries based on the schema and context.
-            If unable to plan, use default:
-            {
-                "intent": "data",
-                "approach": "none",
-                "db_query": "{query}",
-                "doc_query": ""
-            }
-            Return the JSON object as a string, without ```json or other wrappers.
+            Return the JSON object, enclosed in ```json\n{{...}}\n```.
             Schema: {schema}
             Query: {query}
             """
@@ -58,7 +54,12 @@ class QueryAgent:
         try:
             schema = self.db_manager.get_schema()
             chain = prompt | self.llm | self.parser
-            plan_json = chain.invoke({"query": state["query"], "schema": schema}).strip()
+            plan_response = chain.invoke({"query": state["query"], "schema": schema}).strip()
+            logger.info(f"Raw plan response: {plan_response}")
+            if plan_response.startswith("```json\n") and plan_response.endswith("\n```"):
+                plan_json = plan_response[8:-4].strip()
+            else:
+                plan_json = plan_response
             state["plan"] = json.loads(plan_json)
             required_keys = {"intent", "approach", "db_query", "doc_query"}
             if not all(k in state["plan"] for k in required_keys) or state["plan"]["intent"] not in ["document", "data", "hybrid"]:
@@ -166,27 +167,28 @@ class QueryAgent:
             - Query: {query}
             - Database Results: {db_results}
             - Document Results: {doc_results}
-            Return a JSON object as a string with:
-            - completed: Boolean (true if both db_query and doc_query are answered per plan, false if not).
-            - remaining: String describing what's missing (e.g., "Database sub-query not answered") or "None" if complete.
-            - action: String ("db_query", "doc_query", "none") for next step if incomplete.
-            If unsure, default to:
-            {
-                "completed": true,
-                "remaining": "None",
-                "action": "none"
-            }
-            Return the JSON object as a string, without ```json or other wrappers.
+            Return a JSON object with:
+            {{
+                "completed": Boolean (true if both db_query and doc_query are answered per plan, false if not),
+                "remaining": String describing what's missing or "None" if complete,
+                "action": String ("db_query", "doc_query", "none") for next step if incomplete
+            }}
+            Return the JSON object, enclosed in ```json\n{{...}}\n```.
             """
         )
         try:
             chain = prompt | self.llm | self.parser
-            completion_json = chain.invoke({
+            completion_response = chain.invoke({
                 "query": state["query"],
                 "plan": json.dumps(state["plan"]),
                 "db_results": str(state["db_results"]) or "None",
                 "doc_results": state["document_results"] or "None"
             }).strip()
+            logger.info(f"Raw completion response: {completion_response}")
+            if completion_response.startswith("```json\n") and completion_response.endswith("\n```"):
+                completion_json = completion_response[8:-4].strip()
+            else:
+                completion_json = completion_response
             state["completion_status"] = json.loads(completion_json)
             logger.info(f"Completion status: {state['completion_status']}")
             print(f"Step: Completion: {state['completion_status']['completed']}, Action: {state['completion_status']['action']}")

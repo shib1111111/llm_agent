@@ -4,7 +4,8 @@ import hashlib
 from filelock import FileLock
 from PyPDF2 import PdfReader
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
+# from langchain_huggingface import HuggingFaceEmbeddings
+from llm_models import BedrockEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from config import logger, CONFIG
 
@@ -18,7 +19,8 @@ class DocumentProcessor:
 
     def initialize_embeddings(self):
         try:
-            self.embeddings_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+            # self.embeddings_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+            self.embeddings_model = BedrockEmbeddings(api_key=CONFIG["ANTHROPIC_API_KEY"], model_id="amazon-embedding-v2")
             logger.info("Embeddings model initialized")
             print("Step: Embeddings model initialized")
         except Exception as e:
