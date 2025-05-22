@@ -1,3 +1,4 @@
+# server/llm_agent.py
 from typing import TypedDict, Optional
 import json
 from langgraph.graph import StateGraph, END
@@ -56,10 +57,13 @@ class QueryAgent:
             chain = prompt | self.llm | self.parser
             plan_response = chain.invoke({"query": state["query"], "schema": schema}).strip()
             logger.info(f"Raw plan response: {plan_response}")
-            if plan_response.startswith("```json\n") and plan_response.endswith("\n```"):
-                plan_json = plan_response[8:-4].strip()
+            # Find the first { and last } to extract the JSON content
+            start_idx = plan_response.find("{")
+            end_idx = plan_response.rfind("}") + 1
+            if start_idx != -1 and end_idx != 0 and start_idx < end_idx:
+                plan_json = plan_response[start_idx:end_idx]
             else:
-                plan_json = plan_response
+                plan_json = plan_response  # Fallback to raw response if no {...} found
             state["plan"] = json.loads(plan_json)
             required_keys = {"intent", "approach", "db_query", "doc_query"}
             if not all(k in state["plan"] for k in required_keys) or state["plan"]["intent"] not in ["document", "data", "hybrid"]:
@@ -185,10 +189,14 @@ class QueryAgent:
                 "doc_results": state["document_results"] or "None"
             }).strip()
             logger.info(f"Raw completion response: {completion_response}")
-            if completion_response.startswith("```json\n") and completion_response.endswith("\n```"):
-                completion_json = completion_response[8:-4].strip()
+            # Find the first { and last } to extract the JSON content
+            start_idx = completion_response.find("{")
+            end_idx = completion_response.rfind("}") + 1
+            if start_idx != -1 and end_idx != 0 and start_idx < end_idx:
+                completion_json = completion_response[start_idx:end_idx]
             else:
-                completion_json = completion_response
+                completion_json = completion_response  # Fallback to raw response if no {...} found
+            print(f"Step: Completion response: {completion_json}")
             state["completion_status"] = json.loads(completion_json)
             logger.info(f"Completion status: {state['completion_status']}")
             print(f"Step: Completion: {state['completion_status']['completed']}, Action: {state['completion_status']['action']}")
