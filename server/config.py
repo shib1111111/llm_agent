@@ -16,13 +16,16 @@ def load_config():
     config = {
         "GROQ_API_KEY": os.getenv("GROQ_API_KEY"),
         "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY"),
-        "PROCESSED_DOCS_DIR": "processed_docs"
+        "PROCESSED_DOCS_DIR": "processed_docs",
+        "ROLES": ["admin", "planning", "finance", "operations"]
     }
     if not config["GROQ_API_KEY"]:
         logger.error("GROQ_API_KEY not found")
         raise ValueError("Missing GROQ_API_KEY")
+    if not config["ANTHROPIC_API_KEY"]:
+        logger.error("ANTHROPIC_API_KEY not found")
+        raise ValueError("Missing ANTHROPIC_API_KEY")
     logger.info("Configuration loaded")
-    print("Step: Configuration loaded")
     return config
 
 CONFIG = load_config()

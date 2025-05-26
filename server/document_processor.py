@@ -4,28 +4,31 @@ import hashlib
 from filelock import FileLock
 from PyPDF2 import PdfReader
 from langchain_community.vectorstores import FAISS
-# from langchain_huggingface import HuggingFaceEmbeddings
 from llm_models import BedrockEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from config import logger, CONFIG
 
 class DocumentProcessor:
-    def __init__(self, doc_folder: str):
-        self.doc_folder = doc_folder
-        self.vector_store = None
-        self.embeddings_model = None
-        self.metadata_path = os.path.join(CONFIG["PROCESSED_DOCS_DIR"], "metadata.json")
-        os.makedirs(CONFIG["PROCESSED_DOCS_DIR"], exist_ok=True)
+    def __init__(self, doc_folder: str, role: str):
+        try:
+            self.doc_folder = os.path.join(doc_folder, role)
+            self.role = role
+            self.vector_store = None
+            self.embeddings_model = None
+            self.metadata_path = os.path.join(CONFIG["PROCESSED_DOCS_DIR"], f"metadata_{role}.json")
+            self.index_path = os.path.join(CONFIG["PROCESSED_DOCS_DIR"], f"faiss_index_{role}")
+            os.makedirs(CONFIG["PROCESSED_DOCS_DIR"], exist_ok=True)
+            os.makedirs(self.doc_folder, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Initialization failed for role {role}: {e}")
+            raise
 
     def initialize_embeddings(self):
         try:
-            # self.embeddings_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
             self.embeddings_model = BedrockEmbeddings(api_key=CONFIG["ANTHROPIC_API_KEY"], model_id="amazon-embedding-v2")
-            logger.info("Embeddings model initialized")
-            print("Step: Embeddings model initialized")
+            logger.info(f"Embeddings model initialized for role {self.role}")
         except Exception as e:
-            logger.error(f"Error initializing embeddings: {e}")
-            print(f"Error: Embeddings initialization failed: {e}")
+            logger.error(f"Error initializing embeddings for role {self.role}: {e}")
             raise
 
     def compute_checksum(self, file_path):
@@ -37,7 +40,6 @@ class DocumentProcessor:
             return hash_sha256.hexdigest()
         except Exception as e:
             logger.error(f"Error computing checksum for {file_path}: {e}")
-            print(f"Error: Checksum computation failed for {file_path}: {e}")
             return None
 
     def load_metadata(self):
@@ -49,8 +51,7 @@ class DocumentProcessor:
                 with open(self.metadata_path, "r", encoding="utf-8") as f:
                     return json.load(f)
         except Exception as e:
-            logger.error(f"Error loading metadata: {e}")
-            print(f"Error: Metadata loading failed: {e}")
+            logger.error(f"Error loading metadata for role {self.role}: {e}")
             return {}
 
     def save_metadata(self, metadata):
@@ -59,11 +60,9 @@ class DocumentProcessor:
             with FileLock(lock_path):
                 with open(self.metadata_path, "w", encoding="utf-8") as f:
                     json.dump(metadata, f, indent=4)
-            logger.info("Metadata saved")
-            print("Step: Metadata saved")
+            logger.info(f"Metadata saved for role {self.role}")
         except Exception as e:
-            logger.error(f"Error saving metadata: {e}")
-            print(f"Error: Metadata saving failed: {e}")
+            logger.error(f"Error saving metadata for role {self.role}: {e}")
             raise
 
     def extract_text_from_pdf(self, file_path):
@@ -71,93 +70,83 @@ class DocumentProcessor:
             with open(file_path, "rb") as file:
                 pdf_reader = PdfReader(file)
                 text = "".join(page.extract_text() or "" for page in pdf_reader.pages)
-            logger.info(f"Text extracted from {file_path}")
-            print(f"Step: Text extracted from {file_path}")
+            logger.info(f"Text extracted from {file_path} for role {self.role}")
             return text
         except Exception as e:
-            logger.error(f"Error extracting text from {file_path}: {e}")
-            print(f"Error: Text extraction failed for {file_path}: {e}")
+            logger.error(f"Error extracting text from {file_path} for role {self.role}: {e}")
             return ""
 
     def split_text_into_chunks(self, text: str):
         try:
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
             chunks = text_splitter.split_text(text)
-            logger.info("Text split into chunks")
-            print("Step: Text split into chunks")
+            logger.info(f"Text split into chunks for role {self.role}")
             return chunks
         except Exception as e:
-            logger.error(f"Error splitting text: {e}")
-            print(f"Error: Text splitting failed: {e}")
+            logger.error(f"Error splitting text for role {self.role}: {e}")
             return []
 
     def process_documents(self):
-        self.initialize_embeddings()  # Load embeddings model first
-        metadata = self.load_metadata()
-        text_chunks = []
-        metadatas = []
-        new_files_processed = False
+        try:
+            self.initialize_embeddings()
+            metadata = self.load_metadata()
+            text_chunks = []
+            metadatas = []
+            new_files_processed = False
 
-        print("Step: Checking for new documents to process...")
-        for file_name in os.listdir(self.doc_folder):
-            file_path = os.path.join(self.doc_folder, file_name)
-            if os.path.splitext(file_name)[1].lower() != ".pdf":
-                logger.info(f"Skipping non-PDF file: {file_path}")
-                # print(f"Step: Skipping non-PDF file: {file_path}")
-                continue
+            for file_name in os.listdir(self.doc_folder):
+                file_path = os.path.join(self.doc_folder, file_name)
+                if os.path.splitext(file_name)[1].lower() != ".pdf":
+                    logger.info(f"Skipping non-PDF file: {file_path} for role {self.role}")
+                    continue
 
-            checksum = self.compute_checksum(file_path)
-            if not checksum or checksum in metadata:
-                logger.info(f"Skipping already processed file: {file_path}")
-                # print(f"Step: Skipping already processed file: {file_path}")
-                continue
+                checksum = self.compute_checksum(file_path)
+                if not checksum or checksum in metadata:
+                    logger.info(f"Skipping already processed file: {file_path} for role {self.role}")
+                    continue
 
-            text = self.extract_text_from_pdf(file_path)
-            if not text:
-                continue
+                text = self.extract_text_from_pdf(file_path)
+                if not text:
+                    continue
 
-            chunks = self.split_text_into_chunks(text)
-            if not chunks:
-                continue
+                chunks = self.split_text_into_chunks(text)
+                if not chunks:
+                    continue
 
-            text_chunks.extend(chunks)
-            metadatas.extend([{"file_name": file_name, "checksum": checksum} for _ in chunks])
-            metadata[checksum] = {"original_name": file_name}
-            new_files_processed = True
+                text_chunks.extend(chunks)
+                metadatas.extend([{"file_name": file_name, "checksum": checksum} for _ in chunks])
+                metadata[checksum] = {"original_name": file_name}
+                new_files_processed = True
 
-        if new_files_processed:
-            print("Step: Processing new documents...")
-            self.vector_store = FAISS.from_texts(
-                texts=text_chunks,
-                embedding=self.embeddings_model,
-                metadatas=metadatas
-            )
-            index_path = os.path.join(CONFIG["PROCESSED_DOCS_DIR"], "faiss_index")
-            self.vector_store.save_local(index_path)
-            self.save_metadata(metadata)
-            logger.info("New documents processed and vector store saved")
-            print(f"Step: Vector store created with {len(text_chunks)} chunks")
-        else:
-            print("Step: No new documents to process")
+            if new_files_processed:
+                self.vector_store = FAISS.from_texts(
+                    texts=text_chunks,
+                    embedding=self.embeddings_model,
+                    metadatas=metadatas
+                )
+                self.vector_store.save_local(self.index_path)
+                self.save_metadata(metadata)
+                logger.info(f"New documents processed and vector store saved for role {self.role}")
+            else:
+                logger.info(f"No new documents to process for role {self.role}")
 
-        return self.load_vector_store()
+            return self.load_vector_store()
+        except Exception as e:
+            logger.error(f"Document processing failed for role {self.role}: {e}")
+            raise
 
     def load_vector_store(self):
         try:
-            index_path = os.path.join(CONFIG["PROCESSED_DOCS_DIR"], "faiss_index")
-            if os.path.exists(index_path):
+            if os.path.exists(self.index_path):
                 self.vector_store = FAISS.load_local(
-                    index_path,
+                    self.index_path,
                     self.embeddings_model,
                     allow_dangerous_deserialization=True
                 )
-                logger.info("Vector store loaded")
-                print(f"Step: Vector store loaded with {len(self.vector_store.docstore._dict)} documents")
+                logger.info(f"Vector store loaded for role {self.role}")
             else:
-                logger.info("No existing vector store found")
-                print("Step: No existing vector store found")
+                logger.info(f"No existing vector store found for role {self.role}")
             return self.vector_store
         except Exception as e:
-            logger.error(f"Error loading vector store: {e}")
-            print(f"Error: Vector store loading failed: {e}")
+            logger.error(f"Error loading vector store for role {self.role}: {e}")
             raise
