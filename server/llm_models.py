@@ -4,7 +4,6 @@ import requests
 import json
 from typing import List, Optional
 from pydantic import BaseModel, Field
-
 from config import CONFIG
 
 class BedrockLanguageModelConfig(BaseModel):

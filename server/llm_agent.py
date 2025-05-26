@@ -8,6 +8,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from config import logger, CONFIG
 
+
 class AgentState(TypedDict):
     query: str
     plan: Optional[dict]
