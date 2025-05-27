@@ -2,7 +2,7 @@ import os
 import shutil
 from config import CONFIG, logger
 
-DOC_FOLDER = r"C:\Users\shib kumar saraf\Documents\llm_agent\dataset\pdfs"
+DOC_FOLDER = os.path.join(CONFIG["ROOT_DIR"], "dataset", "pdfs")
 
 ROLE_PDFS = {
     "admin": [
