@@ -10,26 +10,28 @@ from models import Documents, get_db_session, UserSession
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import os
-
+from contextlib import asynccontextmanager
+from api_utils import migrate_sessions
 app = FastAPI(title="SCM Chatbot API")
 
-# Configure CORS with configurable origins
+# Configure CORS with specific origins for security
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CONFIG.get("ALLOWED_ORIGINS", ["*"]),  # Restrict in production
+    allow_origins=CONFIG.get("ALLOWED_ORIGINS", ["http://localhost:3000"]),  # Update with specific frontend URLs
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Include API and auth routers
-app.include_router(auth_router, prefix="/api")
-app.include_router(api_router, prefix="/api")
+app.include_router(auth_router)
+app.include_router(api_router)
 
-@app.on_event("startup")
+@asynccontextmanager
 async def startup_event():
     """Initialize the application by cleaning up expired sessions and processing default documents."""
     db = get_db_session()
+    migrate_sessions()
     try:
         # Clean up expired sessions
         expired_count = db.query(UserSession).filter(
@@ -62,9 +64,10 @@ async def startup_event():
         else:
             logger.info("Successfully processed all default documents for all roles.")
 
-        # Log non-sensitive configuration for debugging
-        safe_config = {k: v for k, v in CONFIG.items() if k not in ["SECRET_KEY", "GROQ_API_KEY", "ANTHROPIC_API_KEY"]}
-        logger.info(f"Application started with configuration")
+        # Log non-sensitive configuration
+        safe_config = {k: v for k, v in CONFIG.items() if k not in ["JWT_SECRET_KEY", "GROQ_API_KEY", "ANTHROPIC_API_KEY"]}
+        logger.info(f"Application started with configuration: {safe_config}")
+        
     except Exception as e:
         logger.error(f"Startup failed: {str(e)}", exc_info=True)
         raise RuntimeError("Application startup failed")
@@ -73,3 +76,5 @@ async def startup_event():
             db.close()
         except Exception as e:
             logger.error(f"Failed to close database session: {str(e)}", exc_info=True)
+
+app.lifespan = startup_event

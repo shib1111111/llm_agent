@@ -1,9 +1,11 @@
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-import os
+from datetime import datetime
 from zoneinfo import ZoneInfo
+import os
+from config import CONFIG, logger
+from models import User, UserSession, UserLog
 from api_utils import (
     create_access_token,
     create_standard_response,
@@ -11,37 +13,31 @@ from api_utils import (
     get_password_hash,
     get_current_user,
     verify_password,
-    get_system_info,
+    get_system_info
 )
-from config import CONFIG, logger
-from models import User, UserSession, UserLog
 from schema import StandardResponse, Token, UserModel
 
-auth_router = APIRouter()
+auth_router = APIRouter(prefix="/api", tags=["auth"])
 
 @auth_router.post("/signup", response_model=StandardResponse)
 async def signup(user: UserModel, db: Session = Depends(get_db)):
     """Register a new user with a unique username and email."""
     try:
-        # Validate role
-        if user.role not in CONFIG["ROLES"]:
+        if user.role not in CONFIG.get("ROLES", []):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Invalid role: {user.role}. Please choose from: {', '.join(CONFIG['ROLES'])}."
+                detail=f"Invalid role: {user.role}. Allowed roles: {', '.join(CONFIG['ROLES'])}."
             )
-        # Check for existing username
         if db.query(User).filter(User.username == user.username).first():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="This username is already taken. Please choose a different one."
             )
-        # Check for existing email
         if db.query(User).filter(User.email == user.email).first():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="This email is already registered. Please use a different email or log in."
             )
-        # Create user
         hashed_password = get_password_hash(user.password)
         db_user = User(
             email=user.email,
@@ -65,7 +61,11 @@ async def signup(user: UserModel, db: Session = Depends(get_db)):
         )
 
 @auth_router.post("/login", response_model=StandardResponse)
-async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
     """Authenticate a user and create a session with system information."""
     try:
         user = db.query(User).filter(User.username == form_data.username).first()
@@ -78,7 +78,6 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
             )
         session_id = os.urandom(16).hex()
         access_token, expires_at = create_access_token({"id": user.id, "role": user.role})
-        logger.info(f"Generated access token for {user.username}: {access_token}")
         db_session = UserSession(
             session_id=session_id,
             user_id=user.id,
@@ -88,8 +87,6 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
             status="active",
         )
         db.add(db_session)
-
-        # Log system information
         system_info = get_system_info(request)
         user_log = UserLog(
             user_id=user.id,
@@ -101,14 +98,15 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
             user_agent=system_info["user_agent"],
             memory_gb=system_info["memory_gb"],
             cpu_cores=system_info["cpu_cores"],
+            login_timestamp=datetime.now(ZoneInfo("Asia/Kolkata"))
         )
         db.add(user_log)
         db.commit()
-        logger.info(f"User logged in: {user.username}")
+        logger.info(f"User logged in: {user.username}, token: {access_token[:10]}...")
         return create_standard_response(
             "success",
             "Login successful. Use the provided token for authenticated requests.",
-            Token(access_token=access_token, token_type="bearer").dict(),
+            Token(access_token=access_token, token_type="bearer").dict()
         )
     except HTTPException:
         raise

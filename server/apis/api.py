@@ -1,12 +1,10 @@
-from datetime import datetime
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import os
 import shutil
-from zoneinfo import ZoneInfo
 import uuid
-
-from api_utils import create_standard_response, get_db, get_current_user
 from config import CONFIG, logger
 from database import DatabaseManager
 from doc_query import DocumentQuery
@@ -14,20 +12,16 @@ from document_processor import DocumentProcessor
 from db_query import DatabaseQuery
 from llm_agent import QueryAgent
 from models import ChatHistory, Documents
-from schema import (
-    DatabaseQueryResponse,
-    DocumentUploadResponse,
-    QueryRequest,
-    QueryResponse,
-    StandardResponse,
-)
+from api_utils import create_standard_response, get_db, get_current_user
+from schema import StandardResponse, QueryRequest, QueryResponse, DatabaseQueryResponse, DocumentUploadResponse
 
-api_router = APIRouter()
+api_router = APIRouter(prefix="/api", tags=["api"])
 
 @api_router.get("/connect", response_model=StandardResponse)
 async def connect_db(current_user: dict = Depends(get_current_user)):
-    """Connect to the database and return its schema."""
+    """Connect to the database and return its schema (requires authentication)."""
     try:
+        print(f'postgres db {CONFIG["DB_URI"]}')
         db_manager = DatabaseManager(CONFIG["DB_URI"])
         db_manager.connect()
         schema = db_manager.get_schema()
@@ -48,13 +42,12 @@ async def connect_db(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/documents/upload", response_model=StandardResponse)
 async def upload_document(
-    file: UploadFile = File(...), 
-    current_user: dict = Depends(get_current_user), 
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Upload a document and process it for the user's role."""
+    """Upload a document and process it for the user's role (requires authentication)."""
     try:
-        # Validate file type
         if not file.filename.lower().endswith('.pdf'):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -93,7 +86,7 @@ async def upload_document(
         return create_standard_response(
             "success",
             f"Document {file.filename} uploaded and processed successfully for role {role}.",
-            DocumentUploadResponse(filename=file.filename, role=role, timestamp=upload_record.timestamp).dict(),
+            DocumentUploadResponse(filename=file.filename, role=role, timestamp=upload_record.timestamp).dict()
         )
     except HTTPException:
         raise
@@ -105,8 +98,12 @@ async def upload_document(
         )
 
 @api_router.post("/query", response_model=StandardResponse)
-async def agent_query(request: QueryRequest, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Execute an agent query combining database and document data."""
+async def agent_query(
+    request: QueryRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Execute an agent query combining database and document data (requires authentication)."""
     try:
         if not request.query.strip():
             raise HTTPException(
@@ -116,6 +113,7 @@ async def agent_query(request: QueryRequest, current_user: dict = Depends(get_cu
         role = current_user["role"]
         doc_processor = DocumentProcessor(os.path.join(CONFIG["ROOT_DIR"], "dataset", "pdfs"), role)
         vector_store = doc_processor.process_documents()
+        print(f'postgres db {CONFIG["DB_URI"]}')
         db_manager = DatabaseManager(CONFIG["DB_URI"])
         db_manager.connect()
         agent = QueryAgent(db_manager, vector_store)
@@ -151,8 +149,12 @@ async def agent_query(request: QueryRequest, current_user: dict = Depends(get_cu
         )
 
 @api_router.post("/documents/query", response_model=StandardResponse)
-async def doc_query(request: QueryRequest, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Execute a query on documents for the user's role."""
+async def doc_query(
+    request: QueryRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Execute a query on documents for the user's role (requires authentication)."""
     try:
         if not request.query.strip():
             raise HTTPException(
@@ -183,7 +185,7 @@ async def doc_query(request: QueryRequest, current_user: dict = Depends(get_curr
         return create_standard_response(
             "success",
             "Document query executed successfully.",
-            QueryResponse(query=request.query, response=response).dict(),
+            QueryResponse(query=request.query, response=response).dict()
         )
     except HTTPException:
         raise
@@ -195,8 +197,12 @@ async def doc_query(request: QueryRequest, current_user: dict = Depends(get_curr
         )
 
 @api_router.post("/db/query", response_model=StandardResponse)
-async def db_query(request: QueryRequest, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Execute a database query."""
+async def db_query(
+    request: QueryRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Execute a database query (requires authentication)."""
     try:
         if not request.query.strip():
             raise HTTPException(
@@ -231,7 +237,7 @@ async def db_query(request: QueryRequest, current_user: dict = Depends(get_curre
                 sql_query=result["sql_query"],
                 raw_response=result["raw_response"],
                 natural_language_response=result["natural_language_response"],
-            ).dict(),
+            ).dict()
         )
     except HTTPException:
         raise

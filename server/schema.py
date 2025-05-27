@@ -1,30 +1,25 @@
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
-from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Optional, List, Dict, Any
 
-class QueryRequest(BaseModel):
-    query: str
+class StandardResponse(BaseModel):
+    status: str
+    message: str
+    data: Optional[Dict[str, Any]] = None
 
 class UserModel(BaseModel):
-    email: str
+    email: EmailStr
     name: str
     username: str
-    password: str
+    password: str = Field(..., min_length=8)
     role: str
 
 class Token(BaseModel):
     access_token: str
     token_type: str
 
-class StandardResponse(BaseModel):
-    status: str
-    message: str
-    data: Dict[str, Any] = {}
-
-class DocumentUploadResponse(BaseModel):
-    filename: str
-    role: str
-    timestamp: datetime
+class QueryRequest(BaseModel):
+    query: str
 
 class QueryResponse(BaseModel):
     query: str
@@ -32,6 +27,11 @@ class QueryResponse(BaseModel):
 
 class DatabaseQueryResponse(BaseModel):
     query: str
-    sql_query: Optional[str] = None
-    raw_response: Optional[Dict[str, Any]] = None
+    sql_query: str
+    raw_response: List[Dict[str, Any]]
     natural_language_response: str
+
+class DocumentUploadResponse(BaseModel):
+    filename: str
+    role: str
+    timestamp: datetime

@@ -1,11 +1,11 @@
-# server/models.py
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from config import logger,CONFIG
+from config import logger, CONFIG
 from sqlalchemy import create_engine
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 
 Base = declarative_base()
 SQLITE_DB = CONFIG['SQLITE_DB']
@@ -34,16 +34,17 @@ class User(Base):
     logs = relationship("UserLog", back_populates="user")
     uploaded_documents = relationship("Documents", back_populates="user")
 
+
 class UserSession(Base):
     __tablename__ = "sessions"
     session_id = Column(String, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     token = Column(String, nullable=False)
-    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(ZoneInfo("Asia/Kolkata")))
-    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(ZoneInfo("Asia/Kolkata")))
+    expires_at = Column(DateTime(timezone=True), nullable=False)  # Enable timezone support
     status = Column(String, nullable=False, default="active")  # active, expired
     user = relationship("User", back_populates="sessions")
-
+    
 class UserLog(Base):
     __tablename__ = "user_logs"
     id = Column(Integer, primary_key=True, index=True)
