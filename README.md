@@ -1,151 +1,181 @@
-# LangGraph Agent for Document and Database Querying
+# Agentic Chatbot
 
-This project implements a LangGraph-based agent that processes user queries by combining document retrieval (from PDFs or text files) and SQL database querying. The agent uses a large language model (LLM) from Groq, FAISS for vector search, and PostgreSQL for data storage. It classifies query intent, retrieves relevant document snippets, generates and executes SQL queries, and produces a natural language response.
+The **Agentic Chatbot** is a FastAPI-based backend service designed for secure user authentication, document management, and intelligent query processing. It supports role-based access control, PDF document uploads, and advanced query handling using a combination of database and document-based search. Integrated with a PostgreSQL database and vector stores for document querying, it powers applications requiring robust user management and data processing. The source code is available at [https://github.com/shib1111111/llm_agent](https://github.com/shib1111111/llm_agent).
+
+The server runs on `localhost:8080`, and the client is a Vite-based Vue.js application with TypeScript and TSX, running on `localhost:5173`.
+
+## Table of Contents
+- [Features](#features)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Running the Application](#running-the-application)
+- [Database Schema](#database-schema)
+- [Document Processing](#document-processing)
+- [Security](#security)
+- [Video Guides](#video-guides)
+- [License](#license)
+- [Contact](#Contact)
 
 ## Features
-- **Intent Classification**: Determines if the query requires document retrieval, database querying, or both (hybrid).
-- **Document Processing**: Extracts text from PDFs or text files, creates a FAISS vector store, and retrieves relevant snippets.
-- **SQL Query Generation**: Uses the LLM to generate secure SQL queries based on the database schema and executes them.
-- **Natural Language Response**: Combines document and database results into a concise, user-friendly response.
-- **Error Handling**: Provides clear error messages for database connection issues, document processing failures, or other errors.
-- **Clean Output**: Suppresses warnings and non-critical logs for a user-friendly experience.
+- **Secure User Authentication**:
+  - User signup with unique username, email, and role validation.
+  - Login with OAuth2 and JWT token generation (30-minute expiration).
+  - Logout functionality to expire active sessions.
+- **Role-Based Access Control**:
+  - Restricts document uploads and queries to user-specific roles (e.g., admin, user, guest).
+  - Configurable roles and associated default documents via `ROLE_PDFS`.
+- **Document Management**:
+  - Upload and process PDF documents, stored in role-specific directories (`ROOT_DIR/dataset/pdfs/<role>`).
+  - Support for default documents per role, processed on startup.
+  - Vector store creation for efficient document querying.
+- **Advanced Query Processing**:
+  - **Agent Queries**: Combines database and document data for comprehensive responses using `QueryAgent`.
+  - **Document Queries**: Searches role-specific PDF documents via `DocumentQuery`.
+  - **Database Queries**: Executes SQL queries on PostgreSQL with natural language responses via `DatabaseQuery`.
+- **Session and Activity Logging**:
+  - Tracks user sessions with `UserSession` (session ID, token, expiration).
+  - Logs detailed system information on login (client IP, MAC address, OS, browser, device, memory, CPU cores).
+  - Stores query history with processing times in `ChatHistory`.
+- **Database Integration**:
+  - PostgreSQL backend with SQLAlchemy ORM for robust data management.
+  - Schema retrieval and query execution via `DatabaseManager`.
+- **CORS Support**:
+  - Configured for secure communication with the Vite Vue frontend (`localhost:5173`).
+- **Comprehensive Logging**:
+  - Detailed logs for debugging, excluding sensitive data (e.g., API keys, JWT secrets).
+- **Timezone Awareness**:
+  - All timestamps use `Asia/Kolkata` timezone, with migration support for offset-naive data.
+- **Scalable Architecture**:
+  - Modular design with separate authentication, API, and utility modules.
+  - Extensible for additional LLM integrations (e.g., Groq, Anthropic).
+
+## Architecture
+The application follows a modular architecture:
+- **FastAPI Framework**: Handles HTTP requests and routing (`app.py`).
+- **SQLAlchemy ORM**: Manages PostgreSQL interactions (`models.py`).
+- **Document Processor**: Converts PDFs into vector stores (`document_processor.py`).
+- **Query Agent**: Integrates database and document queries with LLM support (`llm_agent.py`, `doc_query.py`, `db_query.py`).
+- **Authentication**: Implements OAuth2 with JWT tokens (`auth.py`, `api_utils.py`).
+- **CORS Middleware**: Ensures secure frontend communication.
+- **Configuration**: Centralized via `CONFIG` object (`config.py`).
+
+Key files:
+- `app.py`: Application entry point, sets up FastAPI and middleware.
+- `auth.py`: Manages user authentication (signup, login, logout).
+- `api.py`: Handles core operations (database connection, document upload, queries).
+- `api_utils.py`: Provides utilities for authentication, token creation, and system info.
+- `config.py`: Defines settings (e.g., `DB_URI`, `JWT_SECRET_KEY`, `ROLE_PDFS`).
+- `models.py`: SQLAlchemy models for `User`, `UserSession`, `UserLog`, `Documents`, `ChatHistory`.
+- `schema.py`: Pydantic models for request/response validation.
 
 ## Prerequisites
-- **Python**: Version 3.8 or higher.
-- **PostgreSQL**: A running PostgreSQL database with the required schema.
-- **Groq API Key**: Obtain from [xAI](https://x.ai/api).
-- **Document Folder**: A directory containing `.pdf` or `.txt` files to process.
+- **Python**: 3.8 or higher
+- **PostgreSQL**: 12 or higher
+- **Node.js**: Compatible with Vite 4.x or higher for the Vue frontend
 - **Dependencies**:
-  ```bash
-  pip install langchain langchain-groq langchain-community filelock PyPDF2 python-dotenv psycopg2-binary
-  ```
-  Optional (for faster embeddings):
-  ```bash
-  pip install onnxruntime fastembed
-  ```
+  - Python: `fastapi`, `sqlalchemy`, `psutil`, `pyjwt`, `passlib[bcrypt]`, `python-user-agents`, `python-multipart`
+  - Node.js: Vite, Vue 3, TypeScript, TSX support
+- **Environment**: A `.env` file with configuration settings (see [Configuration](#configuration)).
 
-## Setup
-1. **Clone the Repository** (if applicable):
+## Installation
+1. **Clone the Repository**:
    ```bash
-   git clone <repository-url>
-   cd <repository-directory>
+   git clone https://github.com/shib1111111/llm_agent
+   cd llm_agent
    ```
 
-2. **Set Up Environment Variables**:
-   Create a `.env` file in the project root with your Groq API key:
-   ```
-   GROQ_API_KEY=your-api-key-here
-   ```
-
-3. **Configure PostgreSQL**:
-   - Ensure a PostgreSQL database is running at `postgresql+psycopg2://postgres:1234@localhost:5432/DataCoSupplyChain` (modify the URI in `agent.py` if different).
-   - Set up the database schema (e.g., tables for inventory data).
-
-4. **Prepare Documents**:
-   - Place `.pdf` or `.txt` files in the document folder (default: `C:\Users\shib kumar saraf\Downloads\llm_agent\dataset\pdfs`).
-   - Update the `doc_folder` path in `agent.py` if needed.
-
-5. **Install Dependencies**:
-   Run the pip commands listed in the Prerequisites section.
-
-## Usage
-1. **Run the Script**:
-   Execute the agent with the default query:
+2. **Set Up a Virtual Environment**:
    ```bash
-   python agent.py
-   ```
-   The default query is:
-   ```
-   Which inventory items qualify as no-movers according to our policy, and how many do we have?
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-2. **Custom Queries**:
-   Modify the `query`, `db_uri`, and `doc_folder` in the `if __name__ == "__main__":` block of `agent.py`:
-   ```python
-   db_uri = "postgresql+psycopg2://<user>:<password>@<host>:<port>/<database>"
-   doc_folder = "<path-to-your-document-folder>"
-   query = "<your-custom-query>"
-   response = run_agent(query, db_uri, doc_folder)
-   print(f"\nFinal Answer: {response}")
+3. **Install Python Dependencies**:
+   ```bash
+   pip install -r requirements.txt
    ```
 
-3. **Expected Output**:
-   The script prints the progress of each step:
-   ```
-   === Starting Agent Execution ===
-   Query: 'Which inventory items qualify as no-movers according to our policy, and how many do we have?'
-   Database URI: postgresql+psycopg2://postgres:1234@localhost:5432/DataCoSupplyChain
-   Document folder: C:\Users\shib kumar saraf\Downloads\llm_agent\dataset\pdfs
-   Initializing agent state...
-
-   Step 1: Connecting to database and processing documents...
-   Database connection established.
-   Documents processed successfully.
-
-   Step 2: Determining query intent...
-   Intent classified as: hybrid
-   Context updated: ["Query: Which inventory items qualify as no-movers according to our policy, and how many do we have?, Intent: hybrid"]
-
-   Step 3: Retrieving relevant documents...
-   Documents retrieved successfully.
-
-   Step 4: Generating and executing SQL query...
-   SQL Query: SELECT item_id, name FROM inventory WHERE sales = 0 AND last_sold < '2024-11-20';
-   Database results: [{'item_id': 101, 'name': 'Widget A'}, {'item_id': 102, 'name': 'Widget B'}]
-
-   Step 5: Generating final response...
-   Final response generated successfully.
-
-   === Agent Execution Completed ===
-
-   Final Answer: According to the policy, no-movers are items with zero sales in the past 6 months. The database shows 2 no-movers: Widget A (ID 101) and Widget B (ID 102).
+4. **Set Up the Frontend**:
+   ```bash
+   cd frontend
+   npm install
    ```
 
-## Project Structure
-- `agent.py`: Main script containing the LangGraph workflow and agent logic.
-- `processed_doc/`: Directory for storing FAISS vector stores and metadata (`metadata.json`).
-- `.env`: Environment file for storing the Groq API key.
+5. **Configure PostgreSQL**:
+   - Install PostgreSQL and create a database (e.g., `agentic_chatbot`).
+   - Update the `DB_URI` in the `.env` file (see [Configuration](#configuration)).
 
-## Workflow Overview
-The agent processes queries through the following steps:
-1. **Initialize Database and Documents**:
-   - Connects to the PostgreSQL database.
-   - Processes documents in the specified folder into a FAISS vector store.
-2. **Determine Intent**:
-   - Uses the LLM to classify the query as `document`, `data`, or `hybrid`.
-3. **Retrieve Documents**:
-   - Searches the vector store for relevant snippets (for `document` or `hybrid` intents).
-4. **Generate and Execute SQL Query**:
-   - Generates an SQL query using the LLM and executes it (for `data` or `hybrid` intents).
-5. **Generate Response**:
-   - Combines document and database results into a natural language response.
+## Configuration
+Create a `.env` file in the project root with the following settings:
+```env
+DB_URI=postgresql://username:password@localhost:5432/agentic_chatbot
+JWT_SECRET_KEY=your-secret-key
+ANTHROPIC_API_KEY=your-anthropic-api-key
+```
+- **DB_URI**: PostgreSQL connection string (updated to use `agentic_chatbot` database).
+- **JWT_SECRET_KEY**: Secret key for JWT encoding (generate using `os.urandom(32).hex()`).
+- **ROOT_DIR**: Base directory for PDF storage.
+- **ALLOWED_ORIGINS**: Frontend URL(s) for CORS (e.g., `http://localhost:5173`).
+- **ROLES**: Comma-separated list of valid user roles.
+- **ROLE_PDFS**: JSON mapping roles to default PDF documents.
+- **GROQ_API_KEY**, **ANTHROPIC_API_KEY**: API keys for LLM services (if used).
 
-## Troubleshooting
-- **Database Connection Error**:
-  - Verify the `db_uri` in `agent.py`.
-  - Ensure the PostgreSQL server is running and accessible.
-  - Check the database credentials and schema.
-- **No Documents Found**:
-  - Confirm the `doc_folder` path exists and contains `.pdf` or `.txt` files.
-  - Ensure files are not empty or corrupted.
-- **API Key Error**:
-  - Validate the `GROQ_API_KEY` in the `.env` file.
-  - Check your Groq API subscription at [x.ai/api](https://x.ai/api).
-- **Performance Issues**:
-  - For large document folders, ensure sufficient memory and CPU resources.
-  - Consider reducing the `chunk_size` in `split_text_into_chunks` for faster processing.
-- **Warnings or Logs**:
-  - The script suppresses warnings and non-critical logs for a clean output.
-  - Check `agent.log` for error details if issues persist.
+## Running the Application
+1. **Start the Backend**:
+   ```bash
+   uvicorn app:app --host 0.0.0.0 --port 8080
+   ```
+   The API will be available at `http://localhost:8080`.
 
-## Notes
-- **Dependencies**: If `onnxruntime` or `fastembed` are unavailable, the script falls back to `HuggingFaceEmbeddings`.
-- **Logging**: Only errors are logged to the console, suppressing informational logs (e.g., vector store creation).
-- **Customization**: Modify the prompt templates in `agent.py` to adjust the LLM’s behavior.
-- **Scalability**: For large datasets, consider optimizing FAISS indexing or using a more powerful machine.
+2. **Start the Frontend**:
+   ```bash
+   cd frontend
+   npm run dev
+   ```
+   The Vue app will run on `http://localhost:5173`.
+
+3. **Database Migration**:
+   - Ensure the database schema is created using SQLAlchemy models in `models.py`.
+   - Run `migrate_sessions()` (via `api_utils.py`) if `UserSession.expires_at` values are offset-naive.
+   - Default documents in `ROLE_PDFS` are processed on startup.
+
+## Database Schema
+The PostgreSQL database includes:
+- **User**: Stores user details (`id`, `email`, `name`, `username`, `password`, `role`, `signup_timestamp`).
+- **UserSession**: Tracks sessions (`session_id`, `user_id`, `token`, `created_at`, `expires_at`, `status`).
+- **UserLog**: Logs login details (`user_id`, `client_ip`, `mac_address`, `os_info`, `browser`, `device`, `user_agent`, `memory_gb`, `cpu_cores`, `login_timestamp`).
+- **Documents**: Records documents (`user_id`, `filename`, `role`, `file_path`, `doc_type`, `timestamp`).
+- **ChatHistory**: Stores query history (`user_id`, `query`, `response`, `response_id`, `query_type`, `query_processing_time`, `chat_timestamp`).
+
+## Document Processing
+- **Default Documents**: Defined in `ROLE_PDFS`, processed on startup, stored in `Documents` with `doc_type="default"`.
+- **Uploaded Documents**: Stored in `ROOT_DIR/dataset/pdfs/<role>`, recorded with `doc_type="uploaded"`, and processed into vector stores.
+- **Vector Store**: Managed by `DocumentProcessor` for efficient document queries via `DocumentQuery`.
+
+## Security
+- **JWT Authentication**: Validates tokens for protected endpoints using `OAuth2PasswordBearer`.
+- **Password Hashing**: Uses bcrypt via `passlib` for secure password storage.
+- **CORS**: Restricted to `ALLOWED_ORIGINS` (e.g., `http://localhost:5173`).
+- **Session Management**: Tokens expire after 30 minutes; expired sessions are cleaned up on startup.
+- **Timezone Handling**: All timestamps use `Asia/Kolkata`; `migrate_sessions()` ensures timezone-aware `UserSession.expires_at`.
+- **Logging**: Excludes sensitive data (e.g., `JWT_SECRET_KEY`, API keys) from logs.
+
+## Video Guides
+- **[AI Agent Architecture](https://youtu.be/mWcpJCHRmog?si=I1uqPNXPkHcDNKFK)**:
+  - Explains the query agent's architecture, integrating database and document processing.
+- **[AI Agent Demo](https://youtu.be/E_-fb--rXds?si=IYtOAuJ0Anl0NqUI)**:
+  - Demonstrates signup, login, document upload, and query execution via the Vue frontend.
+
+
 
 ## License
-This project is unlicensed and provided as-is for educational purposes. Ensure compliance with the terms of use for Groq, LangChain, and other dependencies.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ## Contact
-For issues or contributions, please contact the project maintainer or open an issue on the repository (if applicable).
+
+For questions, collaborations, or further details, please reach out:
+- **Name:** Shib Kumar  
+- **Email:** [shibkumarsaraf05@gmail.com](mailto:shibkumarsaraf05@gmail.com)  
+- **GitHub:** [@shib1111111](https://github.com/shib1111111)
