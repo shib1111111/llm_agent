@@ -60,10 +60,11 @@ async def upload_document(
             Documents.doc_type == "default"
         ).first()
         if not default_doc:
-            logger.error(f"Unauthorized upload attempt: {file.filename} by user {current_user['username']} with role {role}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"You are not authorized to upload {file.filename} for role {role}."
+            logger.info(f"Upload skipped: Default document already exists ({file.filename}) for role {role}")
+            return create_standard_response(
+                "success",
+                f"Document {file.filename} already exists as a default for role {role}. Skipping upload and processing.",
+                DocumentUploadResponse(filename=file.filename, role=role, timestamp=datetime.now(ZoneInfo("Asia/Kolkata"))).dict()
             )
         role_folder = os.path.join(CONFIG["ROOT_DIR"], "dataset", "pdfs", role)
         os.makedirs(role_folder, exist_ok=True)
@@ -235,7 +236,6 @@ async def db_query(
             DatabaseQueryResponse(
                 query=request.query,
                 sql_query=result["sql_query"],
-                raw_response=result["raw_response"],
                 natural_language_response=result["natural_language_response"],
             ).dict()
         )

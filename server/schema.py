@@ -28,7 +28,6 @@ class QueryResponse(BaseModel):
 class DatabaseQueryResponse(BaseModel):
     query: str
     sql_query: str
-    raw_response: List[Dict[str, Any]]
     natural_language_response: str
 
 class DocumentUploadResponse(BaseModel):
