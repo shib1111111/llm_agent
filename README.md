@@ -108,11 +108,15 @@ Key files:
    - Update the `DB_URI` in the `.env` file (see [Configuration](#configuration)).
 
 ## Configuration
-Create a `.env` file in the project root with the following settings:
+Create a `.env` file in the project root(server folder) with the following settings:
 ```env
 DB_URI=postgresql://username:password@localhost:5432/agentic_chatbot
 JWT_SECRET_KEY=your-secret-key
 ANTHROPIC_API_KEY=your-anthropic-api-key
+```
+Create a `.env` file in the project root (frontend folder) w with the following settings:
+```env
+VITE_BASE_URL=http://localhost:8080
 ```
 - **DB_URI**: PostgreSQL connection string (updated to use `agentic_chatbot` database).
 - **JWT_SECRET_KEY**: Secret key for JWT encoding (generate using `os.urandom(32).hex()`).
