@@ -1,6 +1,6 @@
 # Agentic Chatbot
 
-The **Agentic Chatbot** is a FastAPI-based backend service designed for secure user authentication, document management, and intelligent query processing. It supports role-based access control, PDF document uploads, and advanced query handling using a combination of database and document-based search. Integrated with a PostgreSQL database and vector stores for document querying, it powers applications requiring robust user management and data processing. The source code is available at [https://github.com/shib1111111/llm_agent](https://github.com/shib1111111/llm_agent).
+The **Agentic Chatbot** is a FastAPI-based backend service designed for secure user authentication, document management, and intelligent query processing. It supports role-based access control, PDF document uploads, and advanced query handling using a combination of database and document-based search. Integrated with a PostgreSQL database and vector stores for document querying, it powers applications requiring robust user management and data processing. The source code is available at [https://github.com/shib1111111/Agentic-Chatbot](https://github.com/shib1111111/Agentic-Chatbot).
 
 The server runs on `localhost:8080`, and the client is a Vite-based Vue.js application with TypeScript and TSX, running on `localhost:5173`.
 
@@ -82,7 +82,7 @@ Key files:
 ## Installation
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/shib1111111/llm_agent
+   git clone https://github.com/shib1111111/Agentic-Chatbot
    cd llm_agent
    ```
 
